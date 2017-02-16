@@ -1,9 +1,9 @@
 /* mykernel.c: your portion of the kernel
  *
- *	Below are procedures that are called by other parts of the kernel. 
+ *	Below are procedures that are called by other parts of the kernel.
  *	Your ability to modify the kernel is via these procedures.  You may
  *	modify the bodies of these procedures any way you wish (however,
- *	you cannot change the interfaces).  
+ *	you cannot change the interfaces).
  */
 
 #include "aux.h"
@@ -13,7 +13,7 @@
 #define FALSE 0
 #define TRUE 1
 
-/*	A sample semaphore table. You may change this any way you wish.  
+/*	A sample semaphore table. You may change this any way you wish.
  */
 
 static struct {
@@ -21,10 +21,41 @@ static struct {
 	int value;	// value of semaphore
 } semtab[MAXSEMS];
 
+typedef struct {
+  int size;
+	int tail;
+	int head;
+  int curr;
+	int iterator[MAXPROCS - 1];
+} list;
+
+void initList(list *l)
+{
+  l->size = 0;
+  l->head = 0;
+  l->tail = MAXPROCS - 1;
+  l->curr = 0;
+}
+
+void push(list *l, int value)
+{
+  l->tail = (l->tail+1) % MAXPROCS;
+  l->iterator[l->tail] = value;
+	l->size++;
+}
+
+int pop(list *l)
+{
+	l->size--;
+  int value = l->iterator[l->head];
+  l->head = (l->head+1) % MAXPROCS;
+  return value;
+}
+static list procList;
 
 /*	InitSem () is called when kernel starts up.  Initialize data
  *	structures (such as the semaphore table) and call any initialization
- *	procedures here. 
+ *	procedures here.
  */
 
 void InitSem ()
@@ -36,6 +67,7 @@ void InitSem ()
 	for (s = 0; s < MAXSEMS; s++) {		// mark all sems free
 		semtab[s].valid = FALSE;
 	}
+	initList(&procList);
 }
 
 /*	MySeminit (p, v) is called by the kernel whenever the system
@@ -43,7 +75,7 @@ void InitSem ()
  * 	value v, along with the process ID p of the process that called
  *	Seminit.  MySeminit should allocate a semaphore (find a free entry
  *	in semtab and allocate), initialize that semaphore's value to v,
- *	and then return the ID (i.e., index of the allocated entry). 
+ *	and then return the ID (i.e., index of the allocated entry).
  */
 
 int MySeminit (int p, int v)
@@ -69,7 +101,7 @@ int MySeminit (int p, int v)
 }
 
 /*	MyWait (p, s) is called by the kernel whenever the system call
- *	Wait (s) is called.  
+ *	Wait (s) is called.
  */
 
 void MyWait (p, s)
@@ -79,10 +111,13 @@ void MyWait (p, s)
 	/* modify or add code any way you wish */
 
 	semtab[s].value--;
+	if(semtab[s].value<0){
+		push(&procList,p);
+		Block(p);
+	}
 }
-
 /*	MySignal (p, s) is called by the kernel whenever the system call
- *	Signal (s) is called.  
+ *	Signal (s) is called.
  */
 
 void MySignal (p, s)
@@ -90,7 +125,10 @@ void MySignal (p, s)
 	int s;				// semaphore
 {
 	/* modify or add code any way you wish */
-
 	semtab[s].value++;
+	//if list is empty
+	if(procList.size>0){
+		int proc = pop(&procList);
+		Unblock(proc);
+	}
 }
-
