@@ -48,7 +48,7 @@
  *	car to enter and exit.  (However, if there are no cars waiting at one
  *	end, then as cars arrive at the other end, they should be allowed to
  *	enter the road immediately.)
- *	
+ *
  *	F. If the road is free (no cars), then any car attempting to enter
  *	should not be prevented from doing so.
  *
@@ -66,7 +66,7 @@
  * obeys the rules above.
  *
  * IMPLEMENTATION GUIDELINES
- * 
+ *
  * 1. Avoid busy waiting. In class one of the reasons given for using
  * semaphores was to avoid busy waiting in user code and limit it to
  * minimal use in certain parts of the kernel. This is because busy
@@ -140,6 +140,27 @@
 void InitRoad (void);
 void driveRoad (int from, int mph);
 
+struct {
+	int check;
+	int carCount1; //East
+	int carCount2; //West
+  int westList; //list of cars trying to get into the west entrance
+  int eastList; //list of cars trying to get into the east entrance
+  int westEntrance; //semaphore for the west road
+	int eastEntrance; //semaphore for the east road
+  int road00;
+	int road01;
+	int road02;
+	int road03;
+	int road04;
+	int road05;
+	int road06;
+	int road07;
+	int road08;
+	int road09;
+} shm;
+
+
 void Main ()
 {
 	InitRoad ();
@@ -184,7 +205,24 @@ void Main ()
 
 void InitRoad ()
 {
-	/* do any initializations here */
+	Regshm ((char *) &shm, sizeof (shm));
+	shm.carCount1=0; //West
+	shm.carCount2=0; //East
+	shm.check = Seminit(1);
+  shm.westList = Seminit(1); //list of cars trying to get into the west entrance
+  shm.eastList = Seminit(1); //list of cars trying to get into the east entrance
+  shm.westEntrance = Seminit(1); //semaphore for the west road
+	shm.eastEntrance = Seminit(1); //semaphore for the east road
+  shm.road00 = Seminit(1);
+	shm.road01 = Seminit(1);
+	shm.road02 = Seminit(1);
+	shm.road03 = Seminit(1);
+	shm.road04 = Seminit(1);
+	shm.road05 = Seminit(1);
+	shm.road06 = Seminit(1);
+	shm.road07 = Seminit(1);
+	shm.road08 = Seminit(1);
+	shm.road09 = Seminit(1);
 }
 
 #define IPOS(FROM)	(((FROM) == WEST) ? 1 : NUMPOS)
@@ -197,11 +235,48 @@ void driveRoad (from, mph)
 	int p, np, i;			// positions
 
 	c = Getpid ();			// learn this car's ID
+	//put semaphore stuff here
+  if(from==WEST){
+		Wait(shm.westList);
+	}
+	else{
+		Wait(shm.eastList);
+	}
+	Wait(shm.check);
+	if(from==WEST){
+		Wait(shm.westEntrance);
+		if(!shm.carCount1){
+			Wait(shm.eastEntrance);
+		}
+		Signal(shm.westEntrance);
+		Wait(shm.road00);
+	}
+	else{
+		Wait(shm.eastEntrance);
+		if(!shm.carCount2){
+			Wait(shm.westEntrance);
+		}
+		Signal(shm.eastEntrance);
+		Wait(shm.road09);
+	}
+	Signal(shm.check);
 
+  //---------------------------------------------
+	//prints out the stuff for the driving
 	EnterRoad (from);
+	if(from==EAST){
+		shm.carCount2=shm.carCount2+1;
+	}
+	else{
+		shm.carCount1=shm.carCount1+1;
+	}
 	PrintRoad ();
 	Printf ("Car %d enters at %d at %d mph\n", c, IPOS(from), mph);
 
+  //p = current position
+	//np = next position
+	//decided by the from east or west
+	//proceedRoad takes you from p to np
 	for (i = 1; i < NUMPOS; i++) {
 		if (from == WEST) {
 			p = i;
@@ -210,9 +285,82 @@ void driveRoad (from, mph)
 			p = NUMPOS + 1 - i;
 			np = p - 1;
 		}
-
 		Delay (3600/mph);
+		int tempNP = np-1;
+		int tempP = p-1;
+		int tempRoad1;
+		int tempRoad2;
+		//means first spot is open for the people not on road to go
+		if(from==EAST && p==(NUMPOS-1)){
+			Signal(shm.eastList);
+		}
+		else if(from == WEST && p==2){
+			Signal(shm.westList);
+		}
+		//wait on spot on road
+	  if((np-1)==0){
+			tempRoad1=shm.road00;
+		}
+		else if((np-1)==1){
+			tempRoad1=shm.road01;
+		}
+		else if((np-1)==2){
+			tempRoad1=shm.road02;
+		}
+		else if((np-1)==3){
+			tempRoad1=shm.road03;
+		}
+		else if((np-1)==4){
+			tempRoad1=shm.road04;
+		}
+		else if((np-1)==5){
+			tempRoad1=shm.road05;
+		}
+		else if((np-1)==6){
+			tempRoad1=shm.road06;
+		}
+		else if((np-1)==7){
+			tempRoad1=shm.road07;
+		}
+		else if((np-1)==8){
+			tempRoad1=shm.road08;
+		}
+		else if((np-1)==9){
+			tempRoad1=shm.road09;
+		}
+		Wait(tempRoad1);
 		ProceedRoad ();
+		if((p-1)==0){
+			tempRoad2=shm.road00;
+		}
+		else if((p-1)==1){
+			tempRoad2=shm.road01;
+		}
+		else if((p-1)==2){
+			tempRoad2=shm.road02;
+		}
+		else if((p-1)==3){
+			tempRoad2=shm.road03;
+		}
+		else if((p-1)==4){
+			tempRoad2=shm.road04;
+		}
+		else if((p-1)==5){
+			tempRoad2=shm.road05;
+		}
+		else if((p-1)==6){
+			tempRoad2=shm.road06;
+		}
+		else if((p-1)==7){
+			tempRoad2=shm.road07;
+		}
+		else if((p-1)==8){
+			tempRoad2=shm.road08;
+		}
+		else if((p-1)==9){
+			tempRoad2=shm.road09;
+		}
+		Signal(tempRoad2);
 		PrintRoad ();
 		Printf ("Car %d moves from %d to %d\n", c, p, np);
 	}
@@ -221,4 +369,19 @@ void driveRoad (from, mph)
 	ProceedRoad ();
 	PrintRoad ();
 	Printf ("Car %d exits road\n", c);
+	//check for alternation
+	if(from == EAST){
+		shm.carCount2= shm.carCount2-1;
+		Signal(shm.road00);
+		if(!shm.carCount2){
+			Signal(shm.westEntrance);
+		}
+	}
+	else{
+		shm.carCount1= shm.carCount1-1;
+		Signal(shm.road09);
+		if(!shm.carCount1){
+			Signal(shm.eastEntrance);
+		}
+	}
 }

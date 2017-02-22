@@ -19,39 +19,14 @@
 static struct {
 	int valid;	// Is this a valid entry (was sem allocated)?
 	int value;	// value of semaphore
-} semtab[MAXSEMS];
-
-typedef struct {
-  int size;
 	int tail;
 	int head;
-  int curr;
-	int iterator[MAXPROCS - 1];
-} list;
+} semtab[MAXSEMS];
 
-void initList(list *l)
-{
-  l->size = 0;
-  l->head = 0;
-  l->tail = MAXPROCS - 1;
-  l->curr = 0;
-}
-
-void push(list *l, int value)
-{
-  l->tail = (l->tail+1) % MAXPROCS;
-  l->iterator[l->tail] = value;
-	l->size++;
-}
-
-int pop(list *l)
-{
-	l->size--;
-  int value = l->iterator[l->head];
-  l->head = (l->head+1) % MAXPROCS;
-  return value;
-}
-static list procList;
+static struct {
+  int next;
+	int value;
+} blockTab[MAXPROCS];
 
 /*	InitSem () is called when kernel starts up.  Initialize data
  *	structures (such as the semaphore table) and call any initialization
@@ -66,8 +41,14 @@ void InitSem ()
 
 	for (s = 0; s < MAXSEMS; s++) {		// mark all sems free
 		semtab[s].valid = FALSE;
+		semtab[s].head = -1;
+		semtab[s].tail = -1;
+
 	}
-	initList(&procList);
+	for(s = 0; s < MAXPROCS; s++) {
+		blockTab[s].next=-1;
+		blockTab[s].value=-1;
+	}
 }
 
 /*	MySeminit (p, v) is called by the kernel whenever the system
@@ -89,6 +70,7 @@ int MySeminit (int p, int v)
 			break;
 		}
 	}
+
 	if (s == MAXSEMS) {
 		Printf ("No free semaphores\n");
 		return (-1);
@@ -96,7 +78,6 @@ int MySeminit (int p, int v)
 
 	semtab[s].valid = TRUE;
 	semtab[s].value = v;
-
 	return (s);
 }
 
@@ -108,11 +89,22 @@ void MyWait (p, s)
 	int p;				// process
 	int s;				// semaphore
 {
-	/* modify or add code any way you wish */
-
 	semtab[s].value--;
 	if(semtab[s].value<0){
-		push(&procList,p);
+		for(int i=0; i<MAXPROCS;i++){
+			if(blockTab[i].value==-1){
+				blockTab[i].value=p;
+				if(semtab[s].head==-1){
+					semtab[s].head = i;
+					semtab[s].tail = i;
+				}
+				else{
+					blockTab[semtab[s].tail].next=i;
+					semtab[s].tail = i;
+				}
+				break;
+			}
+		}
 		Block(p);
 	}
 }
@@ -124,11 +116,18 @@ void MySignal (p, s)
 	int p;				// process
 	int s;				// semaphore
 {
-	/* modify or add code any way you wish */
 	semtab[s].value++;
-	//if list is empty
-	if(procList.size>0){
-		int proc = pop(&procList);
-		Unblock(proc);
+	if(semtab[s].head != -1){
+		if(blockTab[semtab[s].head].next== -1){
+			blockTab[semtab[s].head].value = -1;
+			semtab[s].head = -1;
+			semtab[s].tail = -1;
+		}
+		else{
+			semtab[s].head = blockTab[semtab[s].head].next;
+			blockTab[semtab[s].head].value = -1;
+			blockTab[semtab[s].head].next = -1;
+		}
+		Unblock(blockTab[semtab[s].head].value);
 	}
 }
